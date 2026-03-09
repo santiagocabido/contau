@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contau</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg:#0f0e0c;--surface:#1a1916;--surface2:#242320;--border:#2e2c28;
+    --accent:#e8c547;--accent2:#5ee3a0;--danger:#f05d5e;--warn:#f09a3e;
+    --text:#f0ede6;--muted:#7a7670;--radius:8px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;min-height:100vh;}
+
+  /* LOADING */
+  #loading-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
+  .loading-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:28px;letter-spacing:-1px;}
+  .loading-logo span{color:var(--accent);}
+  .spinner-lg{width:32px;height:32px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;}
+
+  /* AUTH */
+  #auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);}
+  .auth-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;width:400px;max-width:95vw;animation:slideUp 0.3s ease;}
+  .auth-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:32px;letter-spacing:-1px;margin-bottom:4px;}
+  .auth-logo span{color:var(--accent);}
+  .auth-sub{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:28px;}
+  .auth-tabs{display:flex;gap:4px;margin-bottom:22px;background:var(--bg);border-radius:var(--radius);padding:4px;}
+  .auth-tab{flex:1;text-align:center;padding:8px;border-radius:6px;cursor:pointer;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border:none;background:none;transition:all 0.2s;}
+  .auth-tab.active{background:var(--surface);color:var(--text);}
+  .auth-form{display:none;}
+  .auth-form.active{display:block;}
+  .auth-msg{padding:10px 14px;border-radius:var(--radius);font-size:11px;margin-bottom:14px;display:none;}
+  .auth-error{background:rgba(240,93,94,0.1);border:1px solid rgba(240,93,94,0.3);color:var(--danger);}
+  .auth-success{background:rgba(94,227,160,0.1);border:1px solid rgba(94,227,160,0.3);color:var(--accent2);}
+
+  /* APP */
+  #app-screen{display:none;}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;letter-spacing:-1px;}
+  .logo span{color:var(--accent);}
+  .header-right{display:flex;align-items:center;gap:12px;}
+  .empresa-selector{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:6px 10px;border-radius:var(--radius);outline:none;max-width:200px;}
+  .header-user{font-size:10px;color:var(--muted);}
+  .btn-signout{background:none;border:1px solid var(--border);color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:10px;padding:5px 10px;border-radius:var(--radius);cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:all 0.2s;}
+  .btn-signout:hover{color:var(--danger);border-color:var(--danger);}
+
+  nav{display:flex;gap:2px;background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;overflow-x:auto;}
+  .tab-btn{background:none;border:none;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:13px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s;white-space:nowrap;}
+  .tab-btn:hover{color:var(--text);}
+  .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+
+  main{max-width:1100px;margin:0 auto;padding:28px;}
+  .section{display:none;}
+  .section.active{display:block;}
+
+  /* ONBOARDING */
+  #onboarding-banner{background:linear-gradient(135deg,rgba(232,197,71,0.1),rgba(94,227,160,0.06));border:1px solid rgba(232,197,71,0.25);border-radius:10px;padding:18px 22px;margin-bottom:22px;display:none;}
+  .ob-title{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--accent);margin-bottom:10px;}
+  .ob-steps{display:flex;gap:10px;flex-wrap:wrap;}
+  .ob-step{font-size:11px;padding:5px 12px;border-radius:20px;cursor:pointer;transition:all 0.2s;}
+  .ob-step.done{background:rgba(94,227,160,0.12);color:var(--accent2);border:1px solid rgba(94,227,160,0.3);}
+  .ob-step.todo{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+  .ob-step.todo:hover{border-color:var(--accent);color:var(--text);}
+
+  /* CARDS */
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}
+  .card-label{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .card-value{font-family:'Syne',sans-serif;font-size:24px;font-weight:700;}
+  .card-value.green{color:var(--accent2);}
+  .card-value.yellow{color:var(--accent);}
+  .card-value.red{color:var(--danger);}
+
+  /* TABLE */
+  .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{padding:10px 14px;text-align:left;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:400;border-bottom:1px solid var(--border);}
+  td{padding:11px 14px;border-bottom:1px solid var(--border);}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--surface2);}
+  .empty{text-align:center;padding:40px;color:var(--muted);font-size:12px;}
+
+  /* BADGES */
+  .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:9px;letter-spacing:1px;text-transform:uppercase;font-weight:500;}
+  .badge-pendiente{background:rgba(240,154,62,0.15);color:var(--warn);border:1px solid rgba(240,154,62,0.3);}
+  .badge-pagada{background:rgba(94,227,160,0.12);color:var(--accent2);border:1px solid rgba(94,227,160,0.3);}
+  .badge-parcial{background:rgba(232,197,71,0.12);color:var(--accent);border:1px solid rgba(232,197,71,0.3);}
+  .badge-vencida{background:rgba(240,93,94,0.12);color:var(--danger);border:1px solid rgba(240,93,94,0.3);}
+
+  /* BUTTONS */
+  .btn{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;padding:8px 16px;border-radius:var(--radius);border:none;cursor:pointer;transition:all 0.18s;text-transform:uppercase;}
+  .btn-primary{background:var(--accent);color:#111;font-weight:600;}
+  .btn-primary:hover{background:#f0d050;transform:translateY(-1px);}
+  .btn-primary:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border);}
+  .btn-ghost:hover{color:var(--text);border-color:var(--muted);}
+  .btn-danger{background:transparent;color:var(--danger);border:1px solid rgba(240,93,94,0.3);}
+  .btn-danger:hover{background:rgba(240,93,94,0.1);}
+  .btn-sm{padding:4px 10px;font-size:9px;}
+  .btn-ai{background:linear-gradient(135deg,#e8c547,#f09a3e);color:#111;font-weight:700;}
+  .btn-ai:hover{opacity:0.9;transform:translateY(-1px);}
+  .btn-full{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;}
+
+  /* FILTERS */
+  .filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+  .filter-select,.filter-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:7px 11px;border-radius:var(--radius);outline:none;}
+  .filter-select:focus,.filter-input:focus{border-color:var(--accent);}
+
+  /* MODAL */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:100;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:26px;width:500px;max-width:95vw;max-height:92vh;overflow-y:auto;animation:slideUp 0.2s ease;}
+  .modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:17px;margin-bottom:18px;}
+  .form-row{margin-bottom:13px;}
+  .form-label{display:block;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  .form-input,.form-select,.form-textarea{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:9px 12px;border-radius:var(--radius);outline:none;transition:border-color 0.2s;}
+  .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);}
+  .form-textarea{resize:vertical;min-height:60px;}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;}
+  .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;}
+
+  /* DRAG DROP */
+  .drop-zone{border:2px dashed var(--border);border-radius:12px;padding:44px 32px;text-align:center;cursor:pointer;transition:all 0.25s;background:var(--surface);position:relative;}
+  .drop-zone:hover,.drop-zone.dragover{border-color:var(--accent);background:rgba(232,197,71,0.04);}
+  .drop-zone.dragover{transform:scale(1.01);}
+  .drop-icon{font-size:36px;margin-bottom:12px;display:block;}
+  .drop-title{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;margin-bottom:6px;}
+  .drop-sub{font-size:11px;color:var(--muted);line-height:1.6;}
+  .drop-types{display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap;}
+  .drop-type{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 9px;font-size:10px;color:var(--muted);letter-spacing:1px;}
+  .drop-input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+
+  /* UPLOAD */
+  .upload-result{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px;}
+  .upload-filename{font-family:'Syne',sans-serif;font-weight:600;font-size:13px;}
+  .ai-loading{display:flex;align-items:center;gap:10px;color:var(--accent);font-size:12px;padding:14px 0;}
+  .spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;}
+  .extracted-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:10px;}
+  .extracted-table th{background:var(--bg);padding:7px 10px;text-align:left;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+  .extracted-table td{padding:7px 10px;border-top:1px solid var(--border);}
+  .extracted-table input,.extracted-table select{background:var(--bg);border:1px solid transparent;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:3px 6px;border-radius:4px;width:100%;outline:none;}
+  .extracted-table input:focus,.extracted-table select:focus{border-color:var(--accent);}
+  .row-remove{background:none;border:none;color:var(--danger);cursor:pointer;padding:2px 6px;font-size:12px;}
+  .confirm-bar{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+
+  /* MISC */
+  .top-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+  .section-title{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;}
+  .action-row{display:flex;gap:6px;}
+  .invoice-info{background:var(--bg);border-radius:var(--radius);padding:12px;margin-bottom:14px;font-size:11px;}
+  .invoice-info div{margin-bottom:4px;}
+  .invoice-info .lbl{color:var(--muted);}
+  .progress-bar{height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:4px;}
+  .progress-fill{height:100%;background:var(--accent2);border-radius:3px;transition:width 0.3s;}
+  .ai-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(232,197,71,0.1);border:1px solid rgba(232,197,71,0.3);border-radius:4px;padding:3px 8px;font-size:9px;color:var(--accent);letter-spacing:1px;text-transform:uppercase;}
+  .client-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+  .client-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:border-color 0.2s;}
+  .client-card:hover{border-color:var(--accent);}
+  .client-name{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;margin-bottom:3px;}
+  .client-sub{font-size:10px;color:var(--muted);}
+  .client-stats{display:flex;gap:12px;margin-top:10px;}
+  .client-stat{font-size:10px;}
+  .client-stat-label{color:var(--muted);}
+  .report-section{margin-bottom:22px;}
+  .report-title{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  .no-empresa{text-align:center;padding:60px 20px;color:var(--muted);}
+  .no-empresa-title{font-family:'Syne',sans-serif;font-weight:700;font-size:18px;margin-bottom:8px;color:var(--text);}
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:11px 18px;font-size:12px;z-index:999;transition:transform 0.3s cubic-bezier(.34,1.56,.64,1);pointer-events:none;white-space:nowrap;}
+  #toast.show{transform:translateX(-50%) translateY(0);}
+  #toast.success{border-color:var(--accent2);color:var(--accent2);}
+  #toast.error{border-color:var(--danger);color:var(--danger);}
+  @keyframes slideUp{from{transform:translateY(16px);opacity:0;}to{transform:none;opacity:1;}}
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-screen">
+  <div class="loading-logo">Cont<span>au</span></div>
+  <div class="spinner-lg"></div>
+</div>
+
+<!-- AUTH -->
+<div id="auth-screen" style="display:none">
+  <div class="auth-box">
+    <div class="auth-logo">Cont<span>au</span></div>
+    <div class="auth-sub">Gestión contable inteligente</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Ingresar</button>
+      <button class="auth-tab" onclick="switchAuthTab('register')">Registrarse</button>
+    </div>
+    <!-- LOGIN -->
+    <div class="auth-form active" id="form-login">
+      <div class="auth-msg auth-error" id="login-error"></div>
+      <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="login-email" type="email" placeholder="tu@email.com"></div>
+      <div class="form-row"><label class="form-label">Contraseña</label><input class="form-input" id="login-pass" type="password" placeholder="••••••••"></div>
+      <button class="btn btn-primary btn-full" id="btn-login" onclick="doLogin()">Ingresar</button>
+    </div>
+    <!-- REGISTER -->
+    <div class="auth-form" id="form-register">
+      <div class="auth-msg auth-error" id="register-error"></div>
+      <div class="auth-msg auth-success" id="register-ok"></div>
+      <div class="form-row"><label class="form-label">Tu nombre</label><input class="form-input" id="reg-nombre" placeholder="Juan Pérez"></div>
+      <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="reg-email" type="email" placeholder="tu@email.com"></div>
+      <div class="form-row"><label class="form-label">Contraseña</label><input class="form-input" id="reg-pass" type="password" placeholder="Mínimo 6 caracteres"></div>
+      <button class="btn btn-primary btn-full" id="btn-register" onclick="doRegister()">Crear cuenta</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+  <header>
+    <div class="logo">Cont<span>au</span></div>
+    <div class="header-right">
+      <select class="empresa-selector" id="empresa-selector" onchange="selectEmpresa(this.value)">
+        <option value="">— Seleccioná empresa —</option>
+      </select>
+      <span class="header-user" id="header-user"></span>
+      <button class="btn-signout" onclick="doSignOut()">Salir</button>
+    </div>
+  </header>
+  <nav>
+    <button class="tab-btn active" onclick="showSection('dashboard',this)">Dashboard</button>
+    <button class="tab-btn" onclick="showSection('importar',this)">✦ Importar</button>
+    <button class="tab-btn" onclick="showSection('facturas',this)">Facturas</button>
+    <button class="tab-btn" onclick="showSection('pagos',this)">Pagos</button>
+    <button class="tab-btn" onclick="showSection('contactos',this)">Contactos</button>
+    <button class="tab-btn" onclick="showSection('empresas',this)">Empresas</button>
+    <button class="tab-btn" onclick="showSection('reportes',this)">Reportes</button>
+  </nav>
+  <main>
+
+    <div id="onboarding-banner">
+      <div class="ob-title">✦ Bienvenido a Contau — completá estos pasos para empezar</div>
+      <div class="ob-steps">
+        <div class="ob-step todo" id="step-empresa" onclick="showSection('empresas',null);openModal('modal-empresa')">1 · Agregar empresa cliente</div>
+        <div class="ob-step todo" id="step-contacto" onclick="showSection('contactos',null);openModal('modal-contacto')">2 · Agregar un contacto</div>
+        <div class="ob-step todo" id="step-factura" onclick="showSection('facturas',null);openModal('modal-factura')">3 · Primera factura</div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="section active" id="sec-dashboard">
+      <div id="dash-empty" class="no-empresa" style="display:none">
+        <div class="no-empresa-title">Empezá agregando tu primera empresa cliente</div>
+        <p style="font-size:12px;margin-bottom:20px">Cada empresa es un cliente tuyo como contador.</p>
+        <button class="btn btn-primary" onclick="showSection('empresas',null);openModal('modal-empresa')">+ Nueva empresa</button>
+      </div>
+      <div id="dash-content">
+        <div class="cards" id="summary-cards"></div>
+        <div class="table-wrap">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-family:Syne,sans-serif;font-weight:700;font-size:13px">Pendientes y vencidas</div>
+          <table><thead><tr><th>Factura</th><th>Contacto</th><th>Total</th><th>Vence</th><th>Saldo</th><th>Estado</th></tr></thead>
+          <tbody id="dashboard-table"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- IMPORTAR -->
+    <div class="section" id="sec-importar">
+      <div class="top-row">
+        <div><div class="section-title">Importar con IA</div><div style="font-size:11px;color:var(--muted);margin-top:3px">Subí facturas — la IA extrae los datos automáticamente</div></div>
+      </div>
+      <div style="margin-bottom:22px">
+        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+          <input type="file" id="file-input" class="drop-input" multiple accept=".pdf,.csv,.xlsx,.xls,.txt,.jpg,.jpeg,.png" onclick="event.stopPropagation()">
+          <span class="drop-icon">⬆</span>
+          <div class="drop-title">Arrastrá tus archivos acá</div>
+          <div class="drop-sub">O hacé clic para seleccionar desde tu computadora</div>
+          <div class="drop-types"><span class="drop-type">PDF</span><span class="drop-type">CSV</span><span class="drop-type">Excel</span><span class="drop-type">Imagen</span></div>
+        </div>
+      </div>
+      <div id="upload-results"></div>
+    </div>
+
+    <!-- FACTURAS -->
+    <div class="section" id="sec-facturas">
+      <div class="top-row"><div class="section-title">Facturas</div><button class="btn btn-primary" onclick="openModal('modal-factura')">+ Nueva</button></div>
+      <div class="filters">
+        <input class="filter-input" placeholder="Buscar..." id="f-search" oninput="renderFacturas()">
+        <select class="filter-select" id="f-estado" onchange="renderFacturas()"><option value="">Todos los estados</option><option value="pendiente">Pendiente</option><option value="parcial">Parcial</option><option value="pagada">Pagada</option><option value="vencida">Vencida</option></select>
+        <select class="filter-select" id="f-tipo" onchange="renderFacturas()"><option value="">Emitidas y recibidas</option><option value="emitida">Emitidas</option><option value="recibida">Recibidas</option></select>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>N°</th><th>Tipo</th><th>Contacto</th><th>Fecha</th><th>Vence</th><th>Total</th><th>Pagado</th><th>Saldo</th><th>Estado</th><th></th></tr></thead><tbody id="facturas-table"></tbody></table></div>
+    </div>
+
+    <!-- PAGOS -->
+    <div class="section" id="sec-pagos">
+      <div class="top-row"><div class="section-title">Pagos</div><button class="btn btn-primary" onclick="openPaymentModal()">+ Registrar</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Factura</th><th>Contacto</th><th>Monto</th><th>Método</th><th>Ref.</th><th></th></tr></thead><tbody id="pagos-table"></tbody></table></div>
+    </div>
+
+    <!-- CONTACTOS -->
+    <div class="section" id="sec-contactos">
+      <div class="top-row"><div class="section-title">Contactos</div><button class="btn btn-primary" onclick="openModal('modal-contacto')">+ Nuevo</button></div>
+      <div class="client-grid" id="contactos-grid"></div>
+    </div>
+
+    <!-- EMPRESAS -->
+    <div class="section" id="sec-empresas">
+      <div class="top-row"><div class="section-title">Empresas cliente</div><button class="btn btn-primary" onclick="openModal('modal-empresa')">+ Nueva</button></div>
+      <div class="client-grid" id="empresas-grid"></div>
+    </div>
+
+    <!-- REPORTES -->
+    <div class="section" id="sec-reportes">
+      <div class="top-row"><div class="section-title">Reportes</div><button class="btn btn-ghost" onclick="exportCSV()">⬇ CSV</button></div>
+      <div class="report-section"><div class="report-title">Por contacto</div>
+        <div class="table-wrap"><table><thead><tr><th>Contacto</th><th>Facturado</th><th>Cobrado</th><th>Pendiente</th><th>Facturas</th></tr></thead><tbody id="report-contactos"></tbody></table></div>
+      </div>
+      <div class="report-section"><div class="report-title">Por estado</div>
+        <div class="table-wrap"><table><thead><tr><th>Estado</th><th>Cantidad</th><th>Total</th></tr></thead><tbody id="report-estados"></tbody></table></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL EMPRESA -->
+<div class="modal-overlay" id="modal-empresa">
+  <div class="modal">
+    <div class="modal-title">Nueva empresa cliente</div>
+    <div class="form-row"><label class="form-label">Nombre *</label><input class="form-input" id="emp-nombre" placeholder="Empresa SA"></div>
+    <div class="form-grid">
+      <div class="form-row"><label class="form-label">ABN (Australia)</label><input class="form-input" id="emp-abn" placeholder="XX XXX XXX XXX"></div>
+      <div class="form-row"><label class="form-label">País</label><select class="form-select" id="emp-pais"><option value="AU">Australia</option><option value="AR">Argentina</option><option value="OTHER">Otro</option></select></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="emp-email" type="email" placeholder="contacto@empresa.com"></div>
+      <div class="form-row"><label class="form-label">Teléfono</label><input class="form-input" id="emp-tel" placeholder="+61 4XX XXX XXX"></div>
+    </div>
+    <div class="form-row"><label class="form-label">Régimen fiscal</label>
+      <select class="form-select" id="emp-regimen">
+        <option value="sole_trader">Sole Trader (AU)</option><option value="company">Company (AU)</option>
+        <option value="monotributo">Monotributo (AR)</option><option value="ri">Responsable Inscripto (AR)</option>
+      </select>
+    </div>
+    <div class="form-row" style="display:flex;align-items:center;gap:10px">
+      <input type="checkbox" id="emp-gst" style="accent-color:var(--accent);width:14px;height:14px">
+      <label for="emp-gst" style="font-size:11px;cursor:pointer">Registrado para GST (Australia)</label>
+    </div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModals()">Cancelar</button><button class="btn btn-primary" id="btn-save-empresa" onclick="guardarEmpresa()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- MODAL CONTACTO -->
+<div class="modal-overlay" id="modal-contacto">
+  <div class="modal">
+    <div class="modal-title">Nuevo contacto</div>
+    <div class="form-row"><label class="form-label">Nombre *</label><input class="form-input" id="con-nombre" placeholder="Juan García"></div>
+    <div class="form-grid">
+      <div class="form-row"><label class="form-label">Tipo</label><select class="form-select" id="con-tipo"><option value="cliente">Cliente</option><option value="proveedor">Proveedor</option><option value="ambos">Ambos</option></select></div>
+      <div class="form-row"><label class="form-label">ABN / CUIT</label><input class="form-input" id="con-abn" placeholder="XX XXX XXX XXX"></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label class="form-label">Email</label><input class="form-input" id="con-email" type="email"></div>
+      <div class="form-row"><label class="form-label">Teléfono</label><input class="form-input" id="con-tel"></div>
+    </div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModals()">Cancelar</button><button class="btn btn-primary" id="btn-save-contacto" onclick="guardarContacto()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- MODAL FACTURA -->
+<div class="modal-overlay" id="modal-factura">
+  <div class="modal">
+    <div class="modal-title">Nueva Factura</div>
+    <div class="form-grid">
+      <div class="form-row"><label class="form-label">Tipo</label><select class="form-select" id="fac-tipo"><option value="emitida">Emitida (a cliente)</option><option value="recibida">Recibida (de proveedor)</option></select></div>
+      <div class="form-row"><label class="form-label">Contacto *</label><select class="form-select" id="fac-contacto"></select></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label class="form-label">N° Factura *</label><input class="form-input" id="fac-numero" placeholder="INV-0001"></div>
+      <div class="form-row"><label class="form-label">Fecha *</label><input class="form-input" type="date" id="fac-fecha"></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label class="form-label">Subtotal *</label><input class="form-input" type="number" id="fac-subtotal" placeholder="0.00" oninput="calcGST()"></div>
+      <div class="form-row"><label class="form-label">Vencimiento</label><input class="form-input" type="date" id="fac-vencimiento"></div>
+    </div>
+    <div class="form-row" style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <input type="checkbox" id="fac-gst" style="accent-color:var(--accent);width:14px;height:14px" onchange="calcGST()">
+      <label for="fac-gst" style="font-size:11px;cursor:pointer">+ GST (10%)</label>
+      <span id="gst-preview" style="font-size:11px;color:var(--accent);margin-left:auto"></span>
+    </div>
+    <div class="form-row"><label class="form-label">Concepto</label><textarea class="form-textarea" id="fac-concepto" placeholder="Descripción..."></textarea></div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModals()">Cancelar</button><button class="btn btn-primary" id="btn-save-factura" onclick="guardarFactura()">Guardar</button></div>
+  </div>
+</div>
+
+<!-- MODAL PAGO -->
+<div class="modal-overlay" id="modal-pago">
+  <div class="modal">
+    <div class="modal-title">Registrar Pago</div>
+    <div class="form-row"><label class="form-label">Factura *</label><select class="form-select" id="pag-factura" onchange="updatePaymentInfo()"></select></div>
+    <div class="invoice-info" id="pag-info" style="display:none"></div>
+    <div class="form-grid">
+      <div class="form-row"><label class="form-label">Monto *</label><input class="form-input" type="number" id="pag-monto" placeholder="0.00"></div>
+      <div class="form-row"><label class="form-label">Fecha *</label><input class="form-input" type="date" id="pag-fecha"></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label class="form-label">Método</label><select class="form-select" id="pag-metodo"><option>Transferencia</option><option>Efectivo</option><option>Cheque</option><option>Tarjeta</option><option>PayID</option><option>Otro</option></select></div>
+      <div class="form-row"><label class="form-label">Referencia</label><input class="form-input" id="pag-ref" placeholder="N° transferencia..."></div>
+    </div>
+    <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModals()">Cancelar</button><button class="btn btn-primary" id="btn-save-pago" onclick="guardarPago()">Registrar</button></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── SUPABASE ──────────────────────────────────────────────
+const sb = supabase.createClient(
+  'https://qcsphsrlmrivwawjsymv.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFjc3Boc3JsbXJpdndhd2pzeW12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjIwNTUsImV4cCI6MjA4ODI5ODA1NX0.J91u-aqu9-Wo198ox-3TnQJDtDMWmlJKyy4Zev5S4qQ'
+);
+
+// ── STATE ─────────────────────────────────────────────────
+let user = null, empresaId = null;
+let empresas=[], contactos=[], facturas=[], pagos=[];
+const xMap = {}; // extracted data map
+
+// ── BOOT ──────────────────────────────────────────────────
+async function boot() {
+  const { data:{ session } } = await sb.auth.getSession();
+  if (session) { user = session.user; await initApp(); }
+  else show('auth');
+  sb.auth.onAuthStateChange(async (ev, ses) => {
+    if (ev==='SIGNED_IN') { user=ses.user; await initApp(); }
+    if (ev==='SIGNED_OUT') { user=null; empresaId=null; show('auth'); }
+  });
+}
+
+async function initApp() {
+  show('app');
+  document.getElementById('header-user').textContent = user.email;
+  await loadEmpresas();
+}
+
+function show(screen) {
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('auth-screen').style.display   = screen==='auth' ? 'flex' : 'none';
+  document.getElementById('app-screen').style.display    = screen==='app'  ? 'block': 'none';
+}
+
+// ── AUTH ──────────────────────────────────────────────────
+function switchAuthTab(t) {
+  document.querySelectorAll('.auth-tab').forEach((b,i)=>b.classList.toggle('active',(i===0&&t==='login')||(i===1&&t==='register')));
+  document.getElementById('form-login').classList.toggle('active',t==='login');
+  document.getElementById('form-register').classList.toggle('active',t==='register');
+}
+async function doLogin() {
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  const btn=document.getElementById('btn-login'); const err=document.getElementById('login-error');
+  err.style.display='none'; btn.disabled=true; btn.textContent='Ingresando...';
+  const {error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){err.textContent=error.message;err.style.display='block';}
+  btn.disabled=false; btn.textContent='Ingresar';
+}
+async function doRegister() {
+  const nombre=document.getElementById('reg-nombre').value.trim();
+  const email=document.getElementById('reg-email').value.trim();
+  const pass=document.getElementById('reg-pass').value;
+  const btn=document.getElementById('btn-register');
+  const err=document.getElementById('register-error'); const ok=document.getElementById('register-ok');
+  err.style.display='none'; ok.style.display='none';
+  if(!nombre||!email||!pass){err.textContent='Completá todos los campos';err.style.display='block';return;}
+  btn.disabled=true; btn.textContent='Creando...';
+  const {error}=await sb.auth.signUp({email,password:pass,options:{data:{nombre}}});
+  if(error){err.textContent=error.message;err.style.display='block';}
+  else{ok.textContent='✓ Cuenta creada. Revisá tu email para confirmar.';ok.style.display='block';}
+  btn.disabled=false; btn.textContent='Crear cuenta';
+}
+async function doSignOut() { await sb.auth.signOut(); }
+document.getElementById('login-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+document.getElementById('reg-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doRegister();});
+
+// ── LOAD DATA ─────────────────────────────────────────────
+async function loadEmpresas() {
+  const {data}=await sb.from('empresas').select('*').order('nombre');
+  empresas=data||[];
+  renderEmpresaSelector();
+  if(empresas.length){
+    const saved=localStorage.getItem('ctau_emp_'+user.id);
+    const e=empresas.find(x=>x.id===saved)||empresas[0];
+    await selectEmpresa(e.id);
+  } else { updateOnboarding(); }
+}
+async function selectEmpresa(id) {
+  if(!id) return;
+  empresaId=id;
+  localStorage.setItem('ctau_emp_'+user.id,id);
+  document.getElementById('empresa-selector').value=id;
+  const [c,f,p]=await Promise.all([
+    sb.from('contactos').select('*').eq('empresa_id',id).order('nombre'),
+    sb.from('facturas').select('*').eq('empresa_id',id).order('fecha',{ascending:false}),
+    sb.from('pagos').select('*').eq('empresa_id',id).order('fecha',{ascending:false})
+  ]);
+  contactos=c.data||[]; facturas=f.data||[]; pagos=p.data||[];
+  render();
+}
+
+// ── UTILS ─────────────────────────────────────────────────
+const fmt=n=>'A$ '+Number(n||0).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
+const today=()=>new Date().toISOString().split('T')[0];
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const cName=id=>(contactos.find(x=>x.id===id)||{}).nombre||'—';
+const fPagado=f=>pagos.filter(p=>p.factura_id===f.id).reduce((a,p)=>a+Number(p.monto),0);
+const fSaldo=f=>Math.max(0,Number(f.total)-fPagado(f));
+function fEstado(f) {
+  const p=fPagado(f);
+  if(p>=Number(f.total)-0.01) return 'pagada';
+  if(f.fecha_vencimiento&&f.fecha_vencimiento<today()) return 'vencida';
+  if(p>0) return 'parcial';
+  return 'pendiente';
+}
+const badge=e=>`<span class="badge badge-${e}">${e}</span>`;
+function toast(msg,type='success'){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='show '+type;
+  setTimeout(()=>t.className='',2800);
+}
+function updateOnboarding() {
+  if(empresas.length) document.getElementById('step-empresa').className='ob-step done';
+  if(contactos.length) document.getElementById('step-contacto').className='ob-step done';
+  if(facturas.length) document.getElementById('step-factura').className='ob-step done';
+  document.getElementById('onboarding-banner').style.display=
+    (empresas.length&&contactos.length&&facturas.length)?'none':'block';
+}
+function calcGST() {
+  const s=parseFloat(document.getElementById('fac-subtotal').value)||0;
+  const g=document.getElementById('fac-gst').checked;
+  document.getElementById('gst-preview').textContent=g?`GST A$${(s*0.1).toFixed(2)} → Total A$${(s*1.1).toFixed(2)}`:'';
+}
+
+// ── RENDER ────────────────────────────────────────────────
+function render() {
+  renderDashboard(); renderFacturas(); renderPagos();
+  renderContactos(); renderEmpresas(); renderReportes();
+  updateSelects(); updateOnboarding();
+}
+function renderEmpresaSelector() {
+  const s=document.getElementById('empresa-selector');
+  s.innerHTML='<option value="">— Seleccioná empresa —</option>'+empresas.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
+  if(empresaId) s.value=empresaId;
+}
+function renderDashboard() {
+  const empty=document.getElementById('dash-empty');
+  const content=document.getElementById('dash-content');
+  if(!empresas.length){empty.style.display='block';content.style.display='none';return;}
+  empty.style.display='none'; content.style.display='block';
+  const total=facturas.reduce((a,f)=>a+Number(f.total),0);
+  const cobrado=facturas.reduce((a,f)=>a+fPagado(f),0);
+  const pend=facturas.reduce((a,f)=>a+fSaldo(f),0);
+  const venc=facturas.filter(f=>fEstado(f)==='vencida').length;
+  document.getElementById('summary-cards').innerHTML=`
+    <div class="card"><div class="card-label">Total facturado</div><div class="card-value">${fmt(total)}</div></div>
+    <div class="card"><div class="card-label">Cobrado</div><div class="card-value green">${fmt(cobrado)}</div></div>
+    <div class="card"><div class="card-label">Por cobrar</div><div class="card-value yellow">${fmt(pend)}</div></div>
+    <div class="card"><div class="card-label">Vencidas</div><div class="card-value red">${venc}</div></div>`;
+  const urg=facturas.filter(f=>['pendiente','parcial','vencida'].includes(fEstado(f))).sort((a,b)=>(a.fecha_vencimiento||'').localeCompare(b.fecha_vencimiento||'')).slice(0,8);
+  document.getElementById('dashboard-table').innerHTML=urg.length?urg.map(f=>`<tr>
+    <td>${f.numero}</td><td>${cName(f.contacto_id)}</td><td>${fmt(f.total)}</td>
+    <td style="color:${f.fecha_vencimiento&&f.fecha_vencimiento<today()?'var(--danger)':'inherit'}">${f.fecha_vencimiento||'—'}</td>
+    <td style="color:var(--warn)">${fmt(fSaldo(f))}</td><td>${badge(fEstado(f))}</td>
+  </tr>`).join(''):'<tr><td colspan="6" class="empty">Sin facturas pendientes 🎉</td></tr>';
+}
+function renderFacturas() {
+  const s=(document.getElementById('f-search')||{value:''}).value.toLowerCase();
+  const e=(document.getElementById('f-estado')||{value:''}).value;
+  const t=(document.getElementById('f-tipo')||{value:''}).value;
+  const list=facturas.filter(f=>{
+    if(s&&!f.numero.toLowerCase().includes(s)&&!cName(f.contacto_id).toLowerCase().includes(s))return false;
+    if(e&&fEstado(f)!==e)return false;
+    if(t&&f.tipo!==t)return false;
+    return true;
+  });
+  document.getElementById('facturas-table').innerHTML=list.length?list.map(f=>`<tr>
+    <td>${f.numero}</td>
+    <td><span style="font-size:9px;color:${f.tipo==='emitida'?'var(--accent2)':'var(--warn)'}">${f.tipo}</span></td>
+    <td>${cName(f.contacto_id)}</td><td>${f.fecha||'—'}</td>
+    <td style="color:${f.fecha_vencimiento&&f.fecha_vencimiento<today()&&fEstado(f)!=='pagada'?'var(--danger)':'inherit'}">${f.fecha_vencimiento||'—'}</td>
+    <td>${fmt(f.total)}</td><td style="color:var(--accent2)">${fmt(fPagado(f))}</td>
+    <td style="color:${fSaldo(f)>0?'var(--warn)':'var(--accent2)'}">${fmt(fSaldo(f))}</td>
+    <td>${badge(fEstado(f))}</td>
+    <td><div class="action-row">
+      <button class="btn btn-ghost btn-sm" onclick="openPaymentModalFor('${f.id}')">Pago</button>
+      <button class="btn btn-danger btn-sm" onclick="eliminarFactura('${f.id}')">✕</button>
+    </div></td>
+  </tr>`).join(''):'<tr><td colspan="10" class="empty">Sin facturas</td></tr>';
+}
+function renderPagos() {
+  document.getElementById('pagos-table').innerHTML=pagos.length?pagos.map(p=>{
+    const f=facturas.find(x=>x.id===p.factura_id);
+    return `<tr><td>${p.fecha}</td><td>${f?f.numero:'—'}</td><td>${f?cName(f.contacto_id):'—'}</td>
+    <td style="color:var(--accent2)">${fmt(p.monto)}</td><td>${p.metodo}</td>
+    <td style="color:var(--muted)">${p.referencia||'—'}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="eliminarPago('${p.id}')">✕</button></td></tr>`;
+  }).join(''):'<tr><td colspan="7" class="empty">Sin pagos</td></tr>';
+}
+function renderContactos() {
+  document.getElementById('contactos-grid').innerHTML=contactos.length?contactos.map(c=>{
+    const cf=facturas.filter(f=>f.contacto_id===c.id);
+    return `<div class="client-card">
+      <div class="client-name">${c.nombre}</div><div class="client-sub">${c.tipo}${c.abn?' · '+c.abn:''}</div>
+      <div class="client-stats">
+        <div class="client-stat"><div class="client-stat-label">Facturado</div><div>${fmt(cf.reduce((a,f)=>a+Number(f.total),0))}</div></div>
+        <div class="client-stat"><div class="client-stat-label">Pendiente</div><div style="color:var(--warn)">${fmt(cf.reduce((a,f)=>a+fSaldo(f),0))}</div></div>
+      </div>
+      <div style="margin-top:10px"><button class="btn btn-danger btn-sm" onclick="eliminarContacto('${c.id}')">Eliminar</button></div>
+    </div>`;
+  }).join(''):'<div style="color:var(--muted);font-size:12px">Sin contactos.</div>';
+}
+function renderEmpresas() {
+  document.getElementById('empresas-grid').innerHTML=empresas.length?empresas.map(e=>`
+    <div class="client-card" style="${e.id===empresaId?'border-color:var(--accent)':''}">
+      <div class="client-name">${e.nombre}</div>
+      <div class="client-sub">${e.pais||'AU'}${e.abn?' · ABN: '+e.abn:''}</div>
+      <div style="margin-top:6px;font-size:10px;color:var(--muted)">${e.regimen_fiscal||''}${e.registrado_gst?' · GST ✓':''}</div>
+      <div style="margin-top:10px;display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="selectEmpresa('${e.id}')">Seleccionar</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarEmpresa('${e.id}')">✕</button>
+      </div>
+    </div>`).join(''):'<div style="color:var(--muted);font-size:12px">Sin empresas.</div>';
+}
+function renderReportes() {
+  document.getElementById('report-contactos').innerHTML=contactos.length?contactos.map(c=>{
+    const cf=facturas.filter(f=>f.contacto_id===c.id);
+    const tf=cf.reduce((a,f)=>a+Number(f.total),0);
+    const tp=cf.reduce((a,f)=>a+fPagado(f),0);
+    return `<tr><td>${c.nombre}</td><td>${fmt(tf)}</td><td style="color:var(--accent2)">${fmt(tp)}</td><td style="color:${tf-tp>0?'var(--warn)':'var(--accent2)'}">${fmt(tf-tp)}</td><td>${cf.length}</td></tr>`;
+  }).join(''):'<tr><td colspan="5" class="empty">Sin datos</td></tr>';
+  document.getElementById('report-estados').innerHTML=['pendiente','parcial','pagada','vencida'].map(e=>{
+    const l=facturas.filter(f=>fEstado(f)===e);
+    return `<tr><td>${badge(e)}</td><td>${l.length}</td><td>${fmt(l.reduce((a,f)=>a+Number(f.total),0))}</td></tr>`;
+  }).join('');
+}
+function updateSelects() {
+  const co=contactos.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+  const fc=document.getElementById('fac-contacto');
+  if(fc) fc.innerHTML=co||'<option value="">— Sin contactos —</option>';
+  const fo=facturas.filter(f=>fEstado(f)!=='pagada').map(f=>`<option value="${f.id}">${f.numero} — ${cName(f.contacto_id)}</option>`).join('');
+  const pf=document.getElementById('pag-factura');
+  if(pf) pf.innerHTML=fo||'<option value="">Sin facturas pendientes</option>';
+}
+
+// ── NAVIGATION ────────────────────────────────────────────
+function showSection(id,btn) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  render();
+}
+
+// ── MODALS ────────────────────────────────────────────────
+function openModal(id){updateSelects();document.getElementById(id).classList.add('open');if(id==='modal-factura')document.getElementById('fac-fecha').value=today();}
+function openPaymentModal(){updateSelects();document.getElementById('pag-fecha').value=today();document.getElementById('modal-pago').classList.add('open');updatePaymentInfo();}
+function openPaymentModalFor(id){updateSelects();document.getElementById('pag-fecha').value=today();document.getElementById('modal-pago').classList.add('open');document.getElementById('pag-factura').value=id;updatePaymentInfo();}
+function closeModals(){document.querySelectorAll('.modal-overlay').forEach(m=>m.classList.remove('open'));}
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)closeModals();}));
+function updatePaymentInfo(){
+  const fac=facturas.find(f=>f.id===document.getElementById('pag-factura').value);
+  const info=document.getElementById('pag-info');
+  if(!fac){info.style.display='none';return;}
+  const p=fPagado(fac),s=fSaldo(fac),pct=Math.min(100,(p/Number(fac.total))*100);
+  info.style.display='block';
+  info.innerHTML=`<div><span class="lbl">Contacto:</span> ${cName(fac.contacto_id)}</div>
+  <div><span class="lbl">Total:</span> ${fmt(fac.total)} · <span class="lbl">Saldo:</span> <span style="color:var(--warn)">${fmt(s)}</span></div>
+  <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>`;
+  document.getElementById('pag-monto').value=s>0?s.toFixed(2):'';
+}
+
+// ── CRUD ──────────────────────────────────────────────────
+async function guardarEmpresa(){
+  const nombre=document.getElementById('emp-nombre').value.trim();
+  if(!nombre){toast('El nombre es obligatorio','error');return;}
+  const btn=document.getElementById('btn-save-empresa');
+  btn.disabled=true;btn.textContent='Guardando...';
+  const {data,error}=await sb.from('empresas').insert({
+    contador_id:user.id,nombre,
+    abn:document.getElementById('emp-abn').value.trim(),
+    pais:document.getElementById('emp-pais').value,
+    email:document.getElementById('emp-email').value.trim(),
+    telefono:document.getElementById('emp-tel').value.trim(),
+    regimen_fiscal:document.getElementById('emp-regimen').value,
+    registrado_gst:document.getElementById('emp-gst').checked,
+    moneda:'AUD'
+  }).select().single();
+  btn.disabled=false;btn.textContent='Guardar';
+  if(error){toast('Error: '+error.message,'error');return;}
+  empresas.push(data);renderEmpresaSelector();renderEmpresas();
+  if(!empresaId)await selectEmpresa(data.id);
+  closeModals();toast('Empresa guardada ✓');updateOnboarding();
+}
+async function eliminarEmpresa(id){
+  if(!confirm('¿Eliminar empresa y todos sus datos?'))return;
+  await sb.from('empresas').delete().eq('id',id);
+  empresas=empresas.filter(e=>e.id!==id);
+  if(empresaId===id){empresaId=empresas[0]?.id||null;if(empresaId)await selectEmpresa(empresaId);}
+  renderEmpresaSelector();renderEmpresas();toast('Empresa eliminada','error');
+}
+async function guardarContacto(){
+  const nombre=document.getElementById('con-nombre').value.trim();
+  if(!nombre||!empresaId){toast('Completá el nombre y seleccioná una empresa','error');return;}
+  const btn=document.getElementById('btn-save-contacto');
+  btn.disabled=true;btn.textContent='Guardando...';
+  const {data,error}=await sb.from('contactos').insert({
+    empresa_id:empresaId,nombre,
+    tipo:document.getElementById('con-tipo').value,
+    abn:document.getElementById('con-abn').value.trim(),
+    email:document.getElementById('con-email').value.trim(),
+    telefono:document.getElementById('con-tel').value.trim()
+  }).select().single();
+  btn.disabled=false;btn.textContent='Guardar';
+  if(error){toast('Error: '+error.message,'error');return;}
+  contactos.push(data);closeModals();render();toast('Contacto guardado ✓');
+}
+async function eliminarContacto(id){
+  if(!confirm('¿Eliminar este contacto?'))return;
+  await sb.from('contactos').delete().eq('id',id);
+  contactos=contactos.filter(c=>c.id!==id);render();toast('Contacto eliminado','error');
+}
+async function guardarFactura(){
+  const cId=document.getElementById('fac-contacto').value;
+  const num=document.getElementById('fac-numero').value.trim();
+  const sub=parseFloat(document.getElementById('fac-subtotal').value);
+  const fecha=document.getElementById('fac-fecha').value;
+  const venc=document.getElementById('fac-vencimiento').value;
+  const gst=document.getElementById('fac-gst').checked;
+  if(!cId||!num||!sub||!fecha){toast('Completá todos los campos requeridos','error');return;}
+  const gstM=gst?sub*0.1:0, total=sub+gstM;
+  const btn=document.getElementById('btn-save-factura');
+  btn.disabled=true;btn.textContent='Guardando...';
+  const {data,error}=await sb.from('facturas').insert({
+    empresa_id:empresaId,contacto_id:cId,
+    tipo:document.getElementById('fac-tipo').value,
+    numero:num,fecha,fecha_vencimiento:venc||null,
+    subtotal:sub,gst_monto:gstM,total,incluye_gst:gst,
+    concepto:document.getElementById('fac-concepto').value.trim(),
+    estado:'pendiente'
+  }).select().single();
+  btn.disabled=false;btn.textContent='Guardar';
+  if(error){toast('Error: '+error.message,'error');return;}
+  facturas.unshift(data);closeModals();render();toast('Factura guardada ✓');
+}
+async function eliminarFactura(id){
+  if(!confirm('¿Eliminar esta factura y sus pagos?'))return;
+  await sb.from('pagos').delete().eq('factura_id',id);
+  await sb.from('facturas').delete().eq('id',id);
+  facturas=facturas.filter(f=>f.id!==id);pagos=pagos.filter(p=>p.factura_id!==id);
+  render();toast('Factura eliminada','error');
+}
+async function guardarPago(){
+  const facId=document.getElementById('pag-factura').value;
+  const monto=parseFloat(document.getElementById('pag-monto').value);
+  const fecha=document.getElementById('pag-fecha').value;
+  if(!facId||!monto||!fecha){toast('Completá todos los campos','error');return;}
+  const fac=facturas.find(f=>f.id===facId);
+  if(monto>fSaldo(fac)+0.01){toast('El monto supera el saldo pendiente','error');return;}
+  const btn=document.getElementById('btn-save-pago');
+  btn.disabled=true;btn.textContent='Guardando...';
+  const {data,error}=await sb.from('pagos').insert({
+    empresa_id:empresaId,factura_id:facId,fecha,monto,
+    metodo:document.getElementById('pag-metodo').value,
+    referencia:document.getElementById('pag-ref').value.trim()
+  }).select().single();
+  btn.disabled=false;btn.textContent='Registrar';
+  if(error){toast('Error: '+error.message,'error');return;}
+  pagos.unshift(data);
+  const newP=fPagado(fac)+monto;
+  const newE=newP>=Number(fac.total)-0.01?'pagada':'parcial';
+  await sb.from('facturas').update({estado:newE}).eq('id',facId);
+  facturas=facturas.map(f=>f.id===facId?{...f,estado:newE}:f);
+  closeModals();render();toast('Pago registrado ✓');
+}
+async function eliminarPago(id){
+  if(!confirm('¿Eliminar este pago?'))return;
+  await sb.from('pagos').delete().eq('id',id);
+  pagos=pagos.filter(p=>p.id!==id);render();toast('Pago eliminado','error');
+}
+function exportCSV(){
+  const rows=[['Factura','Tipo','Contacto','Fecha','Vencimiento','Total','Pagado','Saldo','Estado']];
+  facturas.forEach(f=>rows.push([f.numero,f.tipo,cName(f.contacto_id),f.fecha,f.fecha_vencimiento||'',f.total,fPagado(f),fSaldo(f),fEstado(f)]));
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));a.download='contau.csv';a.click();
+}
+
+// ── DRAG & DROP + IA ──────────────────────────────────────
+const dz=document.getElementById('drop-zone');
+const fi=document.getElementById('file-input');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('dragover'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dragover');processFiles(Array.from(e.dataTransfer.files));});
+fi.addEventListener('change',()=>{processFiles(Array.from(fi.files));fi.value='';});
+
+async function processFiles(files){for(const f of files)await processFile(f);}
+async function processFile(file){
+  if(!empresaId){toast('Seleccioná una empresa primero','error');return;}
+  const rid=uid();
+  const div=document.getElementById('upload-results');
+  const card=document.createElement('div');
+  card.className='upload-result';card.id='res-'+rid;
+  card.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div class="upload-filename">📄 ${file.name}</div></div><div class="ai-loading"><div class="spinner"></div>Leyendo con IA...</div>`;
+  div.insertBefore(card,div.firstChild);
+  try{
+    const content=await readFile(file);
+    const data=await callAI(file.name,content);
+    renderExtracted(rid,file.name,data);
+  }catch(err){
+    document.getElementById('res-'+rid).innerHTML=`<div class="upload-filename">📄 ${file.name}</div><div style="color:var(--danger);font-size:11px;margin-top:6px">Error: ${err.message}</div>`;
+  }
+}
+function readFile(file){
+  return new Promise((res,rej)=>{
+    const ext=file.name.split('.').pop().toLowerCase();
+    const r=new FileReader();
+    if(['pdf','jpg','jpeg','png','gif','webp'].includes(ext)){
+      r.onload=e=>res({type:'base64',ext,data:e.target.result.split(',')[1],mt:file.type||'application/pdf'});
+    }else{
+      r.onload=e=>res({type:'text',ext,data:e.target.result});
+    }
+    r.onerror=rej;
+    ['pdf','jpg','jpeg','png','gif','webp'].includes(ext)?r.readAsDataURL(file):r.readAsText(file);
+  });
+}
+async function callAI(name,content){
+  const cl=contactos.map(c=>`${c.nombre}(id:${c.id})`).join(',')||'ninguno';
+  const prompt=`Analizá "${name}". Contactos: ${cl}. Respondé SOLO JSON:\n{"tipo":"factura|pago|mixto","facturas":[{"numero":"","clienteNombre":"","contactoId":null,"fecha":"YYYY-MM-DD","vencimiento":"YYYY-MM-DD","subtotal":0,"incluyeGST":false,"total":0,"concepto":""}],"pagos":[{"clienteNombre":"","facturaNumero":"","fecha":"YYYY-MM-DD","monto":0,"metodo":"Transferencia","nota":""}],"resumen":""}`;
+  const uc=content.type==='base64'
+    ?[{type:content.ext==='pdf'?'document':'image',source:{type:'base64',media_type:content.mt,data:content.data}},{type:'text',text:prompt}]
+    :prompt+'\n\nARCHIVO:\n'+content.data.slice(0,8000);
+  const r=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,
+      system:'Sos un asistente contable. Respondés SOLO con JSON válido, sin markdown.',
+      messages:[{role:'user',content:uc}]})
+  });
+  if(!r.ok) throw new Error('API error '+r.status);
+  const d=await r.json();
+  return JSON.parse(d.content.map(b=>b.text||'').join('').replace(/```json|```/g,'').trim());
+}
+function renderExtracted(rid,name,data){
+  xMap[rid]=data;
+  const card=document.getElementById('res-'+rid);
+  const tot=(data.facturas||[]).length+(data.pagos||[]).length;
+  let html=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div class="upload-filename">📄 ${name}</div><div class="ai-badge">✦ IA</div><span style="font-size:11px;color:var(--accent2)">${data.resumen||''}</span></div>`;
+  if(data.facturas?.length){
+    const co=contactos.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
+    html+=`<div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Facturas (${data.facturas.length})</div>
+    <table class="extracted-table"><thead><tr><th>N°</th><th>Contacto</th><th>Fecha</th><th>Vence</th><th>Subtotal</th><th>GST</th><th></th></tr></thead><tbody>`;
+    data.facturas.forEach((f,i)=>{
+      html+=`<tr id="fr-${rid}-${i}">
+        <td><input id="fn-${rid}-${i}" value="${f.numero||''}"></td>
+        <td><select id="fc-${rid}-${i}"><option value="__new__">${f.clienteNombre||'Nuevo'}</option>${co}</select></td>
+        <td><input type="date" id="ff-${rid}-${i}" value="${f.fecha||''}"></td>
+        <td><input type="date" id="fv-${rid}-${i}" value="${f.vencimiento||''}"></td>
+        <td><input type="number" id="fm-${rid}-${i}" value="${f.subtotal||f.total||''}"></td>
+        <td><input type="checkbox" id="fg-${rid}-${i}" ${f.incluyeGST?'checked':''}></td>
+        <td><button class="row-remove" onclick="document.getElementById('fr-${rid}-${i}').remove()">✕</button></td>
+      </tr>`;
+    });
+    html+='</tbody></table>';
+    // auto-select contacto
+    setTimeout(()=>data.facturas.forEach((f,i)=>{if(f.contactoId){const s=document.getElementById(`fc-${rid}-${i}`);if(s)s.value=f.contactoId;}}),50);
+  }
+  if(data.pagos?.length){
+    const fo=facturas.filter(f=>fEstado(f)!=='pagada').map(f=>`<option value="${f.id}">${f.numero}</option>`).join('');
+    html+=`<div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:12px 0 6px">Pagos (${data.pagos.length})</div>
+    <table class="extracted-table"><thead><tr><th>Fecha</th><th>Factura</th><th>Monto</th><th>Método</th><th></th></tr></thead><tbody>`;
+    data.pagos.forEach((p,i)=>{
+      html+=`<tr id="pr-${rid}-${i}">
+        <td><input type="date" id="pd-${rid}-${i}" value="${p.fecha||today()}"></td>
+        <td><select id="pf-${rid}-${i}"><option value="">—</option>${fo}</select></td>
+        <td><input type="number" id="pm-${rid}-${i}" value="${p.monto||''}"></td>
+        <td><select id="pmet-${rid}-${i}">${['Transferencia','Efectivo','Cheque','Tarjeta','PayID','Otro'].map(m=>`<option ${m===p.metodo?'selected':''}>${m}</option>`).join('')}</select></td>
+        <td><button class="row-remove" onclick="document.getElementById('pr-${rid}-${i}').remove()">✕</button></td>
+      </tr>`;
+    });
+    html+='</tbody></table>';
+  }
+  if(!tot) html+=`<div style="color:var(--muted);font-size:11px;padding:10px 0">No se encontraron datos.</div>`;
+  if(tot) html+=`<div class="confirm-bar">
+    <div style="font-size:11px;color:var(--muted)">${tot} elemento(s) — editá si necesitás</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('res-${rid}').remove()">Descartar</button>
+      <button class="btn btn-ai" onclick="confirmarImport('${rid}')">✦ Importar</button>
+    </div>
+  </div>`;
+  card.innerHTML=html;
+}
+async function confirmarImport(rid){
+  const data=xMap[rid]; if(!data) return;
+  let nf=0,np=0;
+  if(data.facturas){
+    for(let i=0;i<data.facturas.length;i++){
+      const row=document.getElementById(`fr-${rid}-${i}`); if(!row) continue;
+      let cId=document.getElementById(`fc-${rid}-${i}`)?.value;
+      const num=document.getElementById(`fn-${rid}-${i}`)?.value?.trim();
+      const sub=parseFloat(document.getElementById(`fm-${rid}-${i}`)?.value)||0;
+      const fecha=document.getElementById(`ff-${rid}-${i}`)?.value;
+      const venc=document.getElementById(`fv-${rid}-${i}`)?.value;
+      const gst=document.getElementById(`fg-${rid}-${i}`)?.checked;
+      if(!num||!sub) continue;
+      if(!cId||cId==='__new__'){
+        const nombre=data.facturas[i].clienteNombre||'Contacto importado';
+        let ex=contactos.find(c=>c.nombre.toLowerCase()===nombre.toLowerCase());
+        if(!ex){const {data:nc}=await sb.from('contactos').insert({empresa_id:empresaId,nombre,tipo:'cliente'}).select().single();if(nc){contactos.push(nc);ex=nc;}}
+        cId=ex?.id;
+      }
+      if(!cId) continue;
+      const gstM=gst?sub*0.1:0,total=sub+gstM;
+      const {data:nfac}=await sb.from('facturas').insert({empresa_id:empresaId,contacto_id:cId,tipo:'emitida',numero:num,fecha:fecha||today(),fecha_vencimiento:venc||null,subtotal:sub,gst_monto:gstM,total,incluye_gst:gst,estado:'pendiente'}).select().single();
+      if(nfac){facturas.unshift(nfac);nf++;}
+    }
+  }
+  if(data.pagos){
+    for(let i=0;i<data.pagos.length;i++){
+      const row=document.getElementById(`pr-${rid}-${i}`); if(!row) continue;
+      const facId=document.getElementById(`pf-${rid}-${i}`)?.value;
+      const monto=parseFloat(document.getElementById(`pm-${rid}-${i}`)?.value)||0;
+      const fecha=document.getElementById(`pd-${rid}-${i}`)?.value;
+      const metodo=document.getElementById(`pmet-${rid}-${i}`)?.value;
+      if(!facId||!monto||!fecha) continue;
+      const {data:np2}=await sb.from('pagos').insert({empresa_id:empresaId,factura_id:facId,fecha,monto,metodo}).select().single();
+      if(np2){pagos.unshift(np2);np++;}
+    }
+  }
+  delete xMap[rid];
+  document.getElementById('res-'+rid).remove();
+  render();
+  toast(`✓ ${nf} factura(s) y ${np} pago(s) importados`);
+}
+
+boot();
+</script>
+</body>
+</html>
